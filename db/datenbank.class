@@ -1,0 +1,566 @@
+<?php
+define("HOST_NAME","localhost");
+define("USER_NAME","diesel");
+define("PASSWORD","jas2018");
+define("DATABASE_NAME","dieselgpt");
+
+
+
+//---------------------------->>Do not edit anything below this line<<------------------------------//
+
+$_hostname = HOST_NAME;
+$_database = DATABASE_NAME;
+$_username = USER_NAME; 
+$_password = PASSWORD; 
+
+$_verbinden = mysql_connect($_hostname, $_username, $_password); 
+mysql_select_db($_database, $_verbinden); 
+
+
+
+define('MYSQL_TYPES_NUMERIC', 'int real ');
+
+define('MYSQL_TYPES_DATE', 'datetime timestamp year date time ' );
+
+define('MYSQL_TYPES_STRING', 'string blob ' );
+
+
+
+class Database
+
+{
+
+   var $last_error;
+
+   var $last_query;   
+
+   var $host;   
+
+   var $user;
+
+   var $pw;
+
+   var $db;  
+
+   var $db_link;     
+
+   var $auto_slashes; 
+
+
+
+	var		$HostName;
+
+	var		$UserName;
+
+	var		$PassWord;
+
+	var		$DatabaseName;
+
+	var		$DatabaseLink;
+
+
+
+function Database($hostName = HOST_NAME, $userName = USER_NAME, $password = PASSWORD, $databaseName = DATABASE_NAME)
+
+	{
+
+
+
+		 $this->HostName		=	$hostName;
+
+		$this->UserName			=	$userName;
+
+		$this->PassWord			=	$password;
+
+		$this->DatabaseName		=	$databaseName;
+
+		$this->DatabaseLink		=	mysql_connect($this->HostName, $this->UserName, $this->PassWord) or die(mysql_error());
+
+		mysql_select_db($this->DatabaseName,$this->DatabaseLink); 
+
+		//or die("<h3>Error on Server. Please Try Once Again...Thank You!!!<h2><hr>")
+
+	}
+
+function xmlentities($string) {
+		return str_replace(array("&", "<", ">", "\"", "'"),
+        array("&amp;", "&lt;", "&gt;", "&quot;", "&apos;"), $string);
+}	
+
+function insert($table, $data)
+
+      {
+
+	  
+
+	
+
+        if (empty($data))
+
+          {
+
+         $this->last_error = "You must pass an array to the insert_array() function.";
+
+         return false;
+
+          }
+
+       
+
+      $cols = '(';
+
+      $values = '(';
+
+     
+
+      foreach ($data as $key=>$value)
+
+      {
+
+         $cols .= "$key,";
+
+         $col_type = $this->get_column_type($table, $key);  // get column type
+
+         if (!$col_type) return false;  // error!
+
+         if (substr_count(MYSQL_TYPES_NUMERIC, "$col_type "))
+
+		 {
+
+		    if ($this->auto_slashes) $value = addslashes($value);
+
+            $values .= "'$value',";
+
+		  }
+
+         elseif (substr_count(MYSQL_TYPES_DATE, "$col_type "))
+
+         {
+
+            $value = $this->sql_date_format($value, $col_type); // format date
+
+            $values .= "'$value',";
+
+         }
+
+         elseif (substr_count(MYSQL_TYPES_STRING, "$col_type "))
+
+         {
+
+            if ($this->auto_slashes) $value = addslashes($value);
+
+            $values .= "'$value',";
+
+         }
+
+      }
+
+      $cols = rtrim($cols, ',').')';
+
+      $values = rtrim($values, ',').')';   
+
+      $sql = "INSERT INTO $table $cols VALUES $values";
+
+	  //echo $sql;
+	//print $sql;
+	//exit();
+	
+	
+      return $this->insert_sql($sql);
+
+   }
+
+   function insert_sql($sql) {
+
+       
+
+      $this->last_query = $sql;
+
+     
+
+      $r = mysql_query($sql);
+
+      if (!$r) {
+
+         $this->last_error = mysql_error ();
+
+         return false;
+
+      }
+
+     
+
+      $id = mysql_insert_id();
+
+      if ($id == 0) return true;
+
+      else return $id;
+
+   }
+
+
+
+    function get_column_type($table, $column)
+
+    {
+
+     
+
+      $r = mysql_query("SELECT $column FROM $table LIMIT 1");
+
+      if (!$r)
+
+      {
+
+         $this->last_error = mysql_error();
+
+         return false;
+
+      }
+
+      $ret = mysql_field_type($r, 0);
+
+      if (!$ret)
+
+      {
+
+         $this->last_error = "Unable to get column information on $table.$column.";
+
+         mysql_free_result($r);
+
+         return false;
+
+      }
+
+      mysql_free_result($r);
+
+      return $ret;
+
+    }
+
+    function sql_date_format($value, $type)
+
+     {
+
+
+
+      if (gettype($value) == 'string') $value = strtotime($value);
+
+      return date('Y-m-d H:i:s', $value);
+
+
+
+   }
+
+    
+
+   function update($table, $data, $condition)
+
+   {
+
+           if (empty($data))
+
+           {
+
+         $this->last_error = "You must pass an array to the update_array() function." ;
+
+         return false;
+
+           }
+
+     
+
+      $sql = "UPDATE $table SET";
+
+      foreach ($data as $key=>$value)
+
+     {      // iterate values to input
+
+          $sql .= " $key=";
+
+         $col_type = $this->get_column_type ($table, $key);  // get column type
+
+         if (!$col_type) return false;  // error!
+
+          // determine if we need to encase the value in single quotes
+
+          
+
+         if (substr_count(MYSQL_TYPES_NUMERIC, "$col_type "))
+
+         $sql .= "$value,";
+
+         elseif (substr_count(MYSQL_TYPES_DATE, "$col_type " ))
+
+         {
+
+            $value = $this->sql_date_format ($value, $col_type); // format date
+
+              $sql .= "'$value',";
+
+         }
+
+         elseif (substr_count(MYSQL_TYPES_STRING, "$col_type "))
+
+         {
+
+          if ($this->auto_slashes) $value = addslashes($value);
+
+            $values .= "'$value',";
+
+            $sql=$sql.$values;
+
+            unset($values);
+
+         }
+
+      }
+
+      $sql = rtrim($sql, ','); // strip off last "extra" comma
+
+      if (!empty($condition)) $sql .= " WHERE $condition" ;
+
+    	//echo "sql=$sql";
+
+      // insert values
+	  //print $sql;
+
+      return $this->update_sql($sql );
+
+      
+
+   }
+
+     function update_sql($sql) {
+
+
+
+    $this->last_query = $sql;
+
+     
+
+      $r = mysql_query($sql);
+
+      if (!$r) {
+
+         $this->last_error = mysql_error ();
+
+         return false;
+
+      }
+
+     
+
+      $rows = mysql_affected_rows();
+
+      if ($rows == 0) return true;  // no rows were updated
+
+      else return $rows;
+
+   }
+
+    
+
+   function select_one_row($id)
+
+   {
+
+    $qry1=mysql_query("select * from s2 where bUserId='$id'");
+
+    $s=mysql_fetch_assoc($qry1);
+
+    return $s;
+
+   }
+
+   
+
+	function mysqlQuery($qry)
+
+	{	
+
+		$rs		=	mysql_query($qry, $this->DatabaseLink);
+
+		return $rs;
+
+		
+
+		echo mysql_error();
+
+	}
+
+	
+
+	function mysqlFetchArray($rs)
+
+	{
+
+		$row	=	array();
+
+		if($rs	===	FALSE)  # In case invalid result resource
+
+			return $row;
+
+		$row	=	mysql_fetch_array($rs);
+
+		return $row;
+
+	}
+
+	
+
+	function mysqlNumRows($rs)
+
+	{
+
+		if($rs	===	FALSE)   # In case invalid result resource
+
+			return 0;
+
+		$rows	=	mysql_num_rows($rs);
+
+		return $rows;
+
+	}
+
+	
+
+	function mysqlFreeResult($rs)
+
+	{
+
+		if($rs	===	FALSE) # In case invalid result resource
+
+			return ;
+
+		mysql_free_result($rs);
+
+	}
+
+	
+
+	function mysqlInsertId()
+
+	{
+
+		$id	=	mysql_insert_id($this->DatabaseLink);
+
+		return $id;
+
+	}
+
+	
+
+	function mysqlClose()
+
+	{
+
+		mysql_close($this->DatabaseLink);
+
+	}
+
+
+
+	function getTableArray($qry)	// Returns a Two dimensional array which contains the data associated with the result set
+
+	{
+
+		$dataTable		=	array();
+
+		$rs				=	mysql_query($qry);
+
+		if($rs	===	FALSE)  # In case invalid result resource
+
+			return $dataTable; 
+
+		
+
+		$fieldcount		=	@mysql_num_fields($rs);
+
+		//Fetching the Fields Names from the database.
+
+		$fields			=	array();	
+
+		for ($i=0; $i<$fieldcount; $i++ )
+
+			$fields[$i]		=	@mysql_field_name($rs,$i);
+
+		
+
+		$count		=	0;
+
+		
+
+		while ($row	=	@mysql_fetch_array($rs)) {
+
+			for ($i=0; $i<$fieldcount; $i++ )
+
+				$dataTable[$count][$fields[$i]]		=	$row[$fields[$i]];
+
+			$count++;	
+
+		}
+
+		@mysql_free_result($rs);
+
+		return 	$dataTable;	
+
+	}	
+
+			
+
+		function fetchSingleRow($qry)
+
+	{
+
+		$row		=	array();
+
+		$rs			=	mysql_query($qry);
+
+		if($rs	===	FALSE)
+
+			return $row;
+
+				
+
+		$row		=	mysql_fetch_array($rs);
+
+		mysql_free_result($rs);
+
+		return $row;	
+
+	}
+
+	function fetchSingleAssocRow($qry)
+
+	{
+
+		$row		=	array();
+
+		$rs			=	mysql_query($qry);
+
+		if($rs	===	FALSE)
+
+			return $row;
+
+				
+
+		$row		=	mysql_fetch_assoc($rs);
+
+		mysql_free_result($rs);
+
+		return $row;	
+
+	}
+
+	
+//-------------------------------------->Start Custom Functions<-------------------------//
+
+	
+function getstyle() {
+		$cqrycat	=	"SELECT * FROM style where id='1' ";
+		$cdatacat	=	$this->fetchSingleAssocRow($cqrycat);
+		return $cdatacat;
+		}
+		
+}
